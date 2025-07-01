@@ -1,7 +1,6 @@
 package usecases
 
 import (
-	"log"
 	"time"
 
 	"github.com/Gabriel-Schiestl/api-go/internal/application/dtos"
@@ -24,12 +23,8 @@ func NewCreateEventUseCase(eventRepository repositories.IEventRepository) *creat
 func (uc *createEventUseCase) Execute(props dtos.CreateEventProps) (*dtos.EventDto, error) {
 	var event models.Event
 
-	log.Printf("CreateEventUseCase - Creating event with OrganizerID: %s", props.OrganizerID)
-	log.Printf("CreateEventUseCase - Event props: %+v", props)
-
 	parsedDate, err := time.Parse("2006-01-02T15:04", props.Date)
 	if err != nil {
-		log.Printf("CreateEventUseCase - Date parsing error: %v", err)
 		return nil, err
 	}
 

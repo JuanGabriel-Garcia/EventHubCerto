@@ -33,25 +33,7 @@ func SetupConfig(host, user, password, port, name string) *sql.DB {
 	}
 
 	Db.AutoMigrate(entities.Event{})
-	
-	// Forçar migração da tabela users
-	if err := Db.AutoMigrate(&entities.User{}); err != nil {
-		log.Printf("Warning: Failed to migrate User table: %v", err)
-	}
-	
-	// Verificar se as colunas existem e adicionar se necessário
-	if !Db.Migrator().HasColumn(&entities.User{}, "password") {
-		if err := Db.Migrator().AddColumn(&entities.User{}, "password"); err != nil {
-			log.Printf("Warning: Failed to add password column: %v", err)
-		}
-	}
-	
-	if !Db.Migrator().HasColumn(&entities.User{}, "user_type") {
-		if err := Db.Migrator().AddColumn(&entities.User{}, "user_type"); err != nil {
-			log.Printf("Warning: Failed to add user_type column: %v", err)
-		}
-	}
-	
+	Db.AutoMigrate(entities.User{})
 	Db.AutoMigrate(entities.Auth{})
 
 	return sqlDb

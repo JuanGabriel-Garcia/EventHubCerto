@@ -69,26 +69,10 @@ func (c *UsersController) GetUsers(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, users)
 }
 
-func (c *UsersController) GetCurrentUser(ctx *gin.Context) {
-	userID, exists := ctx.Get("userID")
-	if !exists || userID == "" {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in token"})
-		return
-	}
-
-	user, err := c.getUserUseCase.Execute(userID.(string))
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	ctx.JSON(http.StatusOK, user)
-}
-
 func (c *UsersController) SetupRoutes() {
 	group := r.Router.Group("/users")
 
 	group.GET("/", c.GetUsers)
-	group.GET("/me", c.GetCurrentUser)
 	group.GET("/:ID", c.GetUser)
 	group.POST("/", c.CreateUser)
 }

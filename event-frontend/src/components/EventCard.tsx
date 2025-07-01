@@ -15,10 +15,11 @@ import { useOrganizerName } from "@/hooks/useOrganizerName";
 interface EventCardProps {
   event: CreateEventResponse;
   showRegistrationBadge?: boolean; // Para mostrar badge "Inscrito" quando necessário
+  badgeText?: string; // Texto personalizado para o badge
 }
 
 // Componente EventCard reutilizável - versão 2.0
-export const EventCard = ({ event, showRegistrationBadge = false }: EventCardProps) => {
+export const EventCard = ({ event, showRegistrationBadge = false, badgeText = "Inscrito" }: EventCardProps) => {
   const organizerName = useOrganizerName(event.organizer_id);
   
   const attendeesCount = event.attendees ? event.attendees.length : 0;
@@ -83,7 +84,7 @@ export const EventCard = ({ event, showRegistrationBadge = false }: EventCardPro
           </Badge>
           {showRegistrationBadge && (
             <Badge className="bg-green-100 text-green-800">
-              Inscrito
+              {badgeText}
             </Badge>
           )}
         </div>

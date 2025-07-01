@@ -61,7 +61,18 @@ class ApiService {
         }
         
         console.error('API Error Response:', errorData);
-        const errorMessage = (errorData as any)?.message || `HTTP error! status: ${response.status} - ${response.statusText}`;
+        
+        // Priorizar a mensagem de erro específica do backend
+        let errorMessage = `HTTP error! status: ${response.status} - ${response.statusText}`;
+        
+        if (errorData && typeof errorData === 'object') {
+          // Tentar diferentes campos de erro que o backend pode usar
+          const backendError = (errorData as any)?.error || (errorData as any)?.message || (errorData as any)?.detail;
+          if (backendError) {
+            errorMessage = backendError;
+          }
+        }
+        
         throw new Error(errorMessage);
       }
       
@@ -122,7 +133,18 @@ class ApiService {
         }
         
         console.error('API Error Response:', errorData);
-        const errorMessage = (errorData as any)?.message || `HTTP error! status: ${response.status} - ${response.statusText}`;
+        
+        // Priorizar a mensagem de erro específica do backend
+        let errorMessage = `HTTP error! status: ${response.status} - ${response.statusText}`;
+        
+        if (errorData && typeof errorData === 'object') {
+          // Tentar diferentes campos de erro que o backend pode usar
+          const backendError = (errorData as any)?.error || (errorData as any)?.message || (errorData as any)?.detail;
+          if (backendError) {
+            errorMessage = backendError;
+          }
+        }
+        
         throw new Error(errorMessage);
       }
       
@@ -149,7 +171,8 @@ class ApiService {
 
   // Autenticação
   async login(data: LoginRequest): Promise<LoginResponse> {
-    return this.request<LoginResponse>('/auth/login', {
+    // Usar requestWithoutAuth para login, já que ainda não temos token
+    return this.requestWithoutAuth<LoginResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -181,7 +204,18 @@ class ApiService {
   }
 
   async getEventsByOrganizer(): Promise<CreateEventResponse[]> {
-    return this.request<CreateEventResponse[]>('/events/organizer');
+    console.log("=== API: Getting events by organizer ===");
+    console.log("Endpoint: /events/organizer");
+    console.log("Auth token:", localStorage.getItem("authToken") ? "Present" : "Missing");
+    
+    try {
+      const result = await this.request<CreateEventResponse[]>('/events/organizer');
+      console.log("API response for getEventsByOrganizer:", result);
+      return result;
+    } catch (error) {
+      console.error("API error in getEventsByOrganizer:", error);
+      throw error;
+    }
   }
 
   async getEventsByUser(): Promise<CreateEventResponse[]> {
@@ -189,7 +223,20 @@ class ApiService {
   }
 
   async getEventById(id: string): Promise<EventWithAttendeesResponse> {
-    return this.request<EventWithAttendeesResponse>(`/events/${id}`);
+    console.log("=== API: Getting event by ID ===");
+    console.log("Event ID:", id);
+    console.log("Endpoint:", `/events/${id}`);
+    
+    try {
+      const result = await this.request<EventWithAttendeesResponse>(`/events/${id}`);
+      console.log("API response for getEventById:", result);
+      console.log("attendees_count in response:", result.attendees_count);
+      console.log("attendees array in response:", result.attendees);
+      return result;
+    } catch (error) {
+      console.error("API error in getEventById:", error);
+      throw error;
+    }
   }
 
   async getUserById(id: string): Promise<CreateUserResponse> {
@@ -211,19 +258,43 @@ class ApiService {
   // Função para testar conectividade
   async testConnection(): Promise<boolean> {
     try {
-      // Usar um endpoint público que existe no backend
+      console.log('Testing connection to backend...');
+      // Tentar um endpoint simples primeiro
       const response = await fetch(`${API_BASE_URL}/events/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
-      // Se retornar 200 ou 401 (token not provided), significa que o servidor está respondendo
-      return response.status === 200 || response.status === 401;
+      
+      console.log('Connection test response status:', response.status);
+      
+      // Se retornar 200 (sucesso) ou 401 (não autorizado mas servidor respondeu), 
+      // significa que o servidor está respondendo
+      const isConnected = response.status === 200 || response.status === 401;
+      console.log('Connection test result:', isConnected);
+      
+      return isConnected;
     } catch (error) {
       console.error('Connection test failed:', error);
       return false;
     }
+  }
+
+  // Função para limpar dados de autenticação
+  clearAuthData(): void {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userType');
+    localStorage.removeItem('isLoggedIn');
+    console.log('Auth data cleared from localStorage');
+  }
+
+  // Logout
+  logout(): void {
+    this.clearAuthData();
   }
 }
 

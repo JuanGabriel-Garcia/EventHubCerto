@@ -16,6 +16,7 @@ import { apiService } from "@/services/api";
 import type { CreateEventResponse } from "@/types/api";
 import { EventCard } from "@/components/EventCard";
 import { LogoutModal } from "@/components/LogoutModal";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 export default function HomePage() {
   const [events, setEvents] = useState<CreateEventResponse[]>([]);
@@ -185,8 +186,8 @@ export default function HomePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {isLoading ? (
-            <div className="col-span-full text-center py-8">
-              <p className="text-gray-500">Carregando eventos...</p>
+            <div className="col-span-full">
+              <LoadingSpinner text="Carregando eventos..." />
             </div>
           ) : filteredEvents.length === 0 ? (
             <div className="col-span-full text-center py-8">

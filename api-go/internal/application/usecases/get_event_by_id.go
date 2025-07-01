@@ -32,19 +32,17 @@ func (uc *getEventByIdUseCase) Execute(props GetEventByIdUseCaseProps) (dtos.Eve
 	}
 
 	eventDto := dtos.EventWithAttendeesDto{
-		ID:             event.ID(),
-		Name:           event.Name(),
-		Description:    event.Description(),
-		Location:       event.Location(),
-		Date:           event.Date(),
-		OrganizerID:    event.OrganizerID(),
-		AttendeesCount: len(event.Attendees()), // Sempre retornar o número de participantes
-		CreatedAt:      event.CreatedAt(),
-		Category:       event.Category(),
-		Limit:          event.Limit(),
+		ID:          event.ID(),
+		Name:        event.Name(),
+		Description: event.Description(),
+		Location:    event.Location(),
+		Date:        event.Date(),
+		OrganizerID: event.OrganizerID(),
+		CreatedAt:   event.CreatedAt(),
+		Category: 	 event.Category(),
+		Limit:       event.Limit(),
 	}
 
-	// Só retornar dados detalhados dos participantes se for o organizador
 	if event.OrganizerID() != props.UserID {
 		return eventDto, nil
 	}

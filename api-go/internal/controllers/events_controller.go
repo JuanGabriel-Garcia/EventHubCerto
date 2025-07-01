@@ -78,8 +78,6 @@ func (ec EventsController) CreateEvent(c *gin.Context) {
 		return
 	}
 	
-	log.Printf("CreateEvent - UserID from context: %s", userID.(string))
-	
 	body := dtos.CreateEventProps{}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		log.Printf("Binding error: %v", err)
@@ -87,9 +85,8 @@ func (ec EventsController) CreateEvent(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Parsed event data before setting OrganizerID: %+v", body)
+	log.Printf("Parsed event data: %+v", body)
 	body.OrganizerID = userID.(string)
-	log.Printf("Event data after setting OrganizerID: %+v", body)
 
 	createdEvent, err := ec.createEventUseCase.Execute(body)
 	if err != nil {
@@ -234,16 +231,12 @@ func (ec EventsController) GetEventsByOrganizer(c *gin.Context) {
 		return
 	}
 
-	log.Printf("GetEventsByOrganizer - UserID from context: %s", userID.(string))
-
 	events, err := ec.getEventsByOrganizerUseCase.Execute(userID.(string))
 	if err != nil {
-		log.Printf("Error getting events by organizer for user %s: %v", userID.(string), err)
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("Found %d events for organizer %s", len(events), userID.(string))
 	c.JSON(200, events)
 }
 

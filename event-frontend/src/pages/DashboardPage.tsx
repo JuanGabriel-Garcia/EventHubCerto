@@ -9,11 +9,14 @@ import { apiService } from "@/services/api";
 import type { CreateEventResponse } from "@/types/api";
 import { EventCard } from "@/components/EventCard";
 import { LogoutModal } from "@/components/LogoutModal";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 export default function DashboardPage() {
   const [user, setUser] = useState({ name: "", email: "", type: "" });
   const [myEvents, setMyEvents] = useState<CreateEventResponse[]>([]);
   const [myRegistrations, setMyRegistrations] = useState<CreateEventResponse[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [isLoadingRegistrations, setIsLoadingRegistrations] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -67,13 +70,9 @@ export default function DashboardPage() {
     console.log("User data:", { name: userName, email: userEmail, type: userType });
     console.log("Current userId from localStorage:", localStorage.getItem("userId"));
 
-    // Buscar eventos do usuário através da API
-    if (userType === "organizer") {
-      console.log("User is organizer, loading events...");
-      loadMyEvents();
-    } else {
-      console.log("User is not organizer, skipping event loading");
-    }
+    // Sempre carregar eventos do usuário (mesmo que não seja organizer pode ter criado eventos)
+    console.log("Loading events for user...");
+    loadMyEvents();
 
     // Carregar inscrições do usuário
     loadMyRegistrations();
@@ -81,30 +80,70 @@ export default function DashboardPage() {
 
   const loadMyEvents = async () => {
     try {
-      console.log("Loading events for organizer...");
-      console.log("Auth token exists:", !!localStorage.getItem("authToken"));
-      console.log("User ID:", localStorage.getItem("userId"));
+      setIsLoadingEvents(true);
       
-      const events = await apiService.getEventsByOrganizer();
-      console.log("Events loaded from API:", events);
-      setMyEvents(events);
+      // Usar diretamente o método alternativo (backend tem issue com /events/organizer)
+      await loadMyEventsAlternative();
+      
     } catch (error) {
       console.error("Error loading events:", error);
       
       // Se o erro for 401, limpar dados e redirecionar para login
       if (error instanceof Error && error.message.includes("401")) {
-        console.log("Token inválido, redirecionando para login...");
         localStorage.clear();
         navigate("/login");
         return;
       }
       
       setMyEvents([]);
+    } finally {
+      setIsLoadingEvents(false);
     }
+  };
+
+  // Função alternativa para buscar eventos por organizador
+  const loadMyEventsAlternative = async () => {
+    // Buscar todos os eventos
+    const allEvents = await apiService.getEvents();
+    
+    // Filtrar eventos pelo organizador atual
+    const userId = localStorage.getItem("userId");
+    
+    if (!userId || userId === "temp-id") {
+      // Para usuários temporários, usar o endpoint original mas corrigir o limit
+      try {
+        const events = await apiService.getEventsByOrganizer();
+        
+        // Corrigir o limit nos eventos vindos do endpoint com problema
+        const correctedEvents = events.map(event => {
+          // Se o limit for 0, buscar o evento correto da lista geral
+          if (event.limit === 0) {
+            const correctEvent = allEvents.find(e => e.id === event.id);
+            if (correctEvent && correctEvent.limit > 0) {
+              return { ...event, limit: correctEvent.limit };
+            }
+          }
+          return event;
+        });
+        
+        setMyEvents(correctedEvents);
+        return;
+      } catch (error) {
+        setMyEvents([]);
+        return;
+      }
+    }
+    
+    const myFilteredEvents = allEvents.filter(event => {
+      return event.organizer_id === userId;
+    });
+    
+    setMyEvents(myFilteredEvents);
   };
 
   const loadMyRegistrations = async () => {
     try {
+      setIsLoadingRegistrations(true);
       console.log("Loading user registrations...");
       console.log("Auth token exists:", !!localStorage.getItem("authToken"));
       console.log("User ID:", localStorage.getItem("userId"));
@@ -124,6 +163,8 @@ export default function DashboardPage() {
       }
       
       setMyRegistrations([]);
+    } finally {
+      setIsLoadingRegistrations(false);
     }
   };
 
@@ -183,21 +224,25 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myRegistrations.map((registration) => (
-                <EventCard key={registration.id} event={registration} showRegistrationBadge={true} />
-              ))}
+              {isLoadingRegistrations ? (
+                <div className="col-span-full">
+                  <LoadingSpinner text="Carregando inscrições..." />
+                </div>
+              ) : myRegistrations.length === 0 ? (
+                <div className="col-span-full text-center py-12">
+                  <p className="text-gray-500 text-lg mb-4">
+                    Você ainda não se inscreveu em nenhum evento.
+                  </p>
+                  <Link to="/">
+                    <Button>Explorar Eventos</Button>
+                  </Link>
+                </div>
+              ) : (
+                myRegistrations.map((registration) => (
+                  <EventCard key={registration.id} event={registration} showRegistrationBadge={true} />
+                ))
+              )}
             </div>
-
-            {myRegistrations.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-gray-500 text-lg mb-4">
-                  Você ainda não se inscreveu em nenhum evento.
-                </p>
-                <Link to="/">
-                  <Button>Explorar Eventos</Button>
-                </Link>
-              </div>
-            )}
           </TabsContent>
 
           <TabsContent value="events" className="space-y-6">
@@ -205,45 +250,47 @@ export default function DashboardPage() {
               <h2 className="text-2xl font-semibold">
                 {user.type === "organizer" ? "Eventos Organizados" : "Eventos"}
               </h2>
-              <div className="flex gap-2">
-                {user.type === "organizer" && (
-                  <Link to="/create-event">
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Novo Evento
-                    </Button>
-                  </Link>
-                )}
-              </div>
+              {user.type === "organizer" && (
+                <Link to="/create-event">
+                  <Button>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Novo Evento
+                  </Button>
+                </Link>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
-              ))}
+              {isLoadingEvents ? (
+                <div className="col-span-full">
+                  <LoadingSpinner text="Carregando eventos..." />
+                </div>
+              ) : myEvents.length === 0 ? (
+                <div className="col-span-full text-center py-12">
+                  <p className="text-gray-500 text-lg mb-4">
+                    {user.type === "organizer"
+                      ? "Você ainda não criou nenhum evento."
+                      : "Não há eventos disponíveis."}
+                  </p>
+                  {user.type === "organizer" ? (
+                    <Link to="/create-event">
+                      <Button>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Criar Primeiro Evento
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Link to="/">
+                      <Button>Explorar Eventos</Button>
+                    </Link>
+                  )}
+                </div>
+              ) : (
+                myEvents.map((event) => (
+                  <EventCard key={event.id} event={event} showRegistrationBadge={true} badgeText="Organizador" />
+                ))
+              )}
             </div>
-
-            {myEvents.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-gray-500 text-lg mb-4">
-                  {user.type === "organizer"
-                    ? "Você ainda não criou nenhum evento."
-                    : "Não há eventos disponíveis."}
-                </p>
-                {user.type === "organizer" ? (
-                  <Link to="/create-event">
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Criar Primeiro Evento
-                    </Button>
-                  </Link>
-                ) : (
-                  <Link to="/">
-                    <Button>Explorar Eventos</Button>
-                  </Link>
-                )}
-              </div>
-            )}
           </TabsContent>
         </Tabs>
       </div>

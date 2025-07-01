@@ -1,7 +1,6 @@
 package middlewares
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/Gabriel-Schiestl/api-go/internal/infra/database"
@@ -20,44 +19,28 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token not provided"})
-			c.Abort()
-			return
-		}
+		authToken, err := c.Cookie("Authorization")
 
-		// Extract token from "Bearer <token>" format
-		var authToken string
-		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-			authToken = authHeader[7:]
-		} else {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
+		if authToken == "" || err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token not provided"})
 			c.Abort()
 			return
 		}
 
 		claims, err := service.ExtractClaims(authToken)
 		if err != nil {
-			log.Printf("Error extracting claims: %v", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
 
-		log.Printf("JWT Claims: %v", claims)
-		userID := claims["sub"].(string)
-		log.Printf("Extracted user ID: %s", userID)
-
-		user, err := database.NewUserRepository(connection.Db, mappers.UserMapper{}).FindById(userID)
+		user, err := database.NewUserRepository(connection.Db, mappers.UserMapper{}).FindById(claims["sub"].(string))
 		if err != nil {
-			log.Printf("Error finding user by ID %s: %v", userID, err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 			c.Abort()
 			return
 		}
 
-		log.Printf("Found user: %s (ID: %s)", user.GetName(), user.GetID())
 		c.Set("userID", user.GetID())
 		c.Next()
 	}

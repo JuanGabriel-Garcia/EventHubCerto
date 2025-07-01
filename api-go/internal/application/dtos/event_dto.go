@@ -26,17 +26,16 @@ type CreateEventProps struct {
 }
 
 type EventWithAttendeesDto struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Location      string    `json:"location"`
-	Date          time.Time `json:"date"`
-	Description   string    `json:"description"`
-	OrganizerID   string    `json:"organizer_id"`
-	Attendees     []UserResponseDTO `json:"attendees"`
-	AttendeesCount int      `json:"attendees_count"` // Número total de participantes (sempre visível)
-	CreatedAt     time.Time `json:"created_at"`
-	Category      string    `json:"category"`
-	Limit         int       `json:"limit"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Location    string    `json:"location"`
+	Date        time.Time `json:"date"`
+	Description string    `json:"description"`
+	OrganizerID string    `json:"organizer_id"`
+	Attendees   []UserResponseDTO `json:"attendees"`
+	CreatedAt   time.Time `json:"created_at"`
+	Category	string    `json:"category"`
+	Limit 	 int       `json:"limit"`
 }
 
 type UpdateEventProps struct {

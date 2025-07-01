@@ -36,24 +36,16 @@ func (c *AuthController) Login(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
 	token, err := c.loginUseCase.Execute(input)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	if token == nil {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Credenciais inválidas"})
-		return
-	}
-
 	ctx.SetCookie("Authorization", *token, 3600, "/", "", false, true)
 
-	// Para retornar também dados do usuário, vamos buscar
-	// Aqui retornamos apenas o token por simplicidade
 	ctx.JSON(http.StatusOK, gin.H{
-		"token": *token,
+		"token":   *token,
 	})
 }
 

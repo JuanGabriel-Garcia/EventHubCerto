@@ -36,7 +36,6 @@ export default function CreateEventPage() {
     location: "",
     category: "",
     capacity: "",
-    price: "0",
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -116,7 +115,6 @@ export default function CreateEventPage() {
         location: formData.location,
         category: formData.category,
         limit: Number.parseInt(formData.capacity), // Backend espera "limit"
-        // price não é suportado pelo backend atual
         // organizerId será extraído do token JWT pelo backend
       };
 
@@ -309,22 +307,6 @@ export default function CreateEventPage() {
                       required
                     />
                   </div>
-                </div>
-
-                <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="price">Preço (R$)</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    placeholder="0.00"
-                    step="0.01"
-                    min="0"
-                    value={formData.price}
-                    onChange={(e) => handleInputChange("price", e.target.value)}
-                  />
-                  <p className="text-sm text-gray-500">
-                    Deixe em 0 para eventos gratuitos
-                  </p>
                 </div>
               </div>
 

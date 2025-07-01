@@ -49,8 +49,9 @@ export default function EventDetailsPage() {
     
     try {
       setIsLoading(true);
-      const eventData = await apiService.getEventById(id);
-      setEvent(eventData);
+      
+      // SEMPRE usar o método de fallback que funciona (buscar de todos os eventos)
+      await loadEventDetailsWithFallback();
       
       // Check if user is registered for the event using the registered events endpoint
       if (currentlyLoggedIn) {
@@ -61,6 +62,49 @@ export default function EventDetailsPage() {
       setMessage("Erro ao carregar detalhes do evento");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Função alternativa para buscar detalhes do evento com fallback
+  const loadEventDetailsWithFallback = async () => {
+    if (!id) return;
+    
+    // Buscar todos os eventos (mesmo endpoint que o EventCard usa)
+    const allEvents = await apiService.getEvents();
+    
+    // Encontrar o evento específico
+    const eventFromList = allEvents.find(e => e.id === id);
+    
+    if (eventFromList) {
+      // Criar um objeto EventWithAttendeesResponse baseado no CreateEventResponse
+      const eventData: EventWithAttendeesResponse = {
+        id: eventFromList.id,
+        name: eventFromList.name,
+        description: eventFromList.description,
+        date: eventFromList.date,
+        location: eventFromList.location,
+        category: eventFromList.category,
+        limit: eventFromList.limit,
+        organizer_id: eventFromList.organizer_id,
+        created_at: eventFromList.created_at,
+        attendees: [], // Inicializar vazio
+        attendees_count: eventFromList.attendees ? eventFromList.attendees.length : 0
+      };
+      
+      // Se temos IDs dos attendees, criar objetos placeholder (IGUAL ao EventCard)
+      if (eventFromList.attendees && eventFromList.attendees.length > 0) {
+        eventData.attendees = eventFromList.attendees.map((attendeeId, index) => ({
+          id: attendeeId,
+          name: `Participante ${index + 1}`,
+          email: `participante${index + 1}@temp.com`,
+          userType: "participant",
+          createdAt: new Date().toISOString()
+        }));
+      }
+      
+      setEvent(eventData);
+    } else {
+      throw new Error("Event not found in list");
     }
   };
 
@@ -86,6 +130,14 @@ export default function EventDetailsPage() {
 
     if (!event || !id) return;
 
+    // Verificar se o usuário atual é o organizador do evento
+    const currentUserId = localStorage.getItem("userId");
+    
+    if (currentUserId && currentUserId !== "temp-id" && event.organizer_id === currentUserId) {
+      setMessage("❌ Não é possível se inscrever no seu próprio evento.");
+      return;
+    }
+
     setIsLoading(true);
     setMessage("");
 
@@ -96,23 +148,37 @@ export default function EventDetailsPage() {
       
       // Atualizar o contador localmente sem recarregar a página
       if (event) {
+        // Usar a mesma lógica do EventCard - atualizar o array attendees
+        const currentAttendees = event.attendees || [];
+        
+        // Criar um placeholder de usuário
+        const tempUser = {
+          id: "temp-user",
+          name: "Novo Participante",
+          email: "temp@temp.com",
+          userType: "participant",
+          createdAt: new Date().toISOString()
+        };
+        
         setEvent({
           ...event,
-          attendees_count: (event.attendees_count || 0) + 1
+          attendees: [...currentAttendees, tempUser]
         });
       }
     } catch (error) {
-      console.error("Error registering for event:", error);
-      
       // Tratar erros específicos
       const errorMessage = error instanceof Error ? error.message : String(error);
       
+      // Verificar mensagens específicas do backend
       if (errorMessage.includes("already exists") || errorMessage.includes("Attendee already exists")) {
         setMessage("❌ Você já está inscrito neste evento.");
-        setIsRegistered(true); // Atualizar o estado
+        setIsRegistered(true);
       } else if (errorMessage.includes("limit reached") || errorMessage.includes("attendee limit reached")) {
         setMessage("❌ Este evento já está lotado.");
-      } else if (errorMessage.includes("Organizer cannot") || errorMessage.includes("organizador") || errorMessage.includes("próprio evento")) {
+      } else if (errorMessage.includes("Organizer cannot be an attendee") || 
+                 errorMessage.includes("Organizer cannot") || 
+                 errorMessage.includes("organizador") || 
+                 errorMessage.includes("próprio evento")) {
         setMessage("❌ Não é possível se inscrever no seu próprio evento.");
       } else {
         setMessage("❌ Erro ao realizar inscrição. Tente novamente.");
@@ -135,9 +201,13 @@ export default function EventDetailsPage() {
       
       // Atualizar o contador localmente sem recarregar a página
       if (event) {
+        // Usar a mesma lógica do EventCard - atualizar o array attendees
+        const currentAttendees = event.attendees || [];
+        const newAttendees = currentAttendees.slice(0, -1); // Remove o último participante
+        
         setEvent({
           ...event,
-          attendees_count: Math.max((event.attendees_count || 0) - 1, 0)
+          attendees: newAttendees
         });
       }
     } catch (error) {
@@ -223,7 +293,9 @@ export default function EventDetailsPage() {
     );
   }
 
-  const attendeesCount = event.attendees_count || (event.attendees ? event.attendees.length : 0);
+  // Usar a mesma lógica que funciona no EventCard
+  const attendeesCount = event.attendees ? event.attendees.length : 0;
+  
   const capacity = event.limit || 0;
   const isEventFull = capacity > 0 && attendeesCount >= capacity;
   
