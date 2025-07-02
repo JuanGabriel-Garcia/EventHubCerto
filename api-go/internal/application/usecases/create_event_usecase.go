@@ -27,6 +27,7 @@ func (uc *createEventUseCase) Execute(props dtos.CreateEventProps) (*dtos.EventD
 	if err != nil {
 		return nil, err
 	}
+	parsedDate = parsedDate.UTC()
 
 	event, businessErr := models.NewEvent(models.EventProps{
 		Name:        &props.Name,

@@ -255,6 +255,33 @@ class ApiService {
     });
   }
 
+  async deleteEvent(eventId: string): Promise<void> {
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      throw new Error("Token de autenticação não encontrado");
+    }
+
+    console.log("Deletando evento:", eventId);
+
+    const response = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log("Response status:", response.status);
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("Erro ao deletar:", errorData);
+      throw new Error(errorData || 'Erro ao deletar evento');
+    }
+
+    console.log("Evento deletado com sucesso");
+  }
+
   // Função para testar conectividade
   async testConnection(): Promise<boolean> {
     try {

@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus } from "lucide-react";
+import { Plus, BookOpen, Settings } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiService } from "@/services/api";
 import type { CreateEventResponse } from "@/types/api";
@@ -17,6 +16,7 @@ export default function DashboardPage() {
   const [myRegistrations, setMyRegistrations] = useState<CreateEventResponse[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isLoadingRegistrations, setIsLoadingRegistrations] = useState(false);
+  const [activeView, setActiveView] = useState("minhas-inscricoes");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -202,23 +202,49 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Olá, {user.name}!
-          </h1>
-          <p className="text-gray-600">
-            Gerencie seus eventos e inscrições em um só lugar.
+      {/* Banner Section */}
+      <section className="bg-gradient-to-r from-green-600 to-blue-600 text-white py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl font-bold mb-4">
+            Olá, {user.name}! Bem-vindo ao seu Dashboard
+          </h2>
+          <p className="text-xl mb-6 opacity-90">
+            {activeView === "meus-eventos"
+              ? "Gerencie todos os seus eventos organizados"
+              : "Acompanhe suas inscrições e eventos favoritos"
+            }
           </p>
+          <div className="flex justify-center gap-4">
+            <Button
+              size="lg"
+              onClick={() => setActiveView("minhas-inscricoes")}
+              className={activeView === "minhas-inscricoes"
+                ? "bg-white text-green-600 hover:bg-gray-100"
+                : "bg-white/20 text-white hover:bg-white/30"
+              }
+            >
+              <BookOpen className="w-4 h-4 mr-2" />
+              Minhas Inscrições
+            </Button>
+            <Button
+              size="lg"
+              onClick={() => setActiveView("meus-eventos")}
+              className={activeView === "meus-eventos"
+                ? "bg-white text-green-600 hover:bg-gray-100"
+                : "bg-white/20 text-white hover:bg-white/30"
+              }
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Meus Eventos
+            </Button>
+          </div>
         </div>
+      </section>
 
-        <Tabs defaultValue="registrations" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="registrations">Minhas Inscrições</TabsTrigger>
-            <TabsTrigger value="events">Meus Eventos</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="registrations" className="space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Content baseado na activeView */}
+        {activeView === "minhas-inscricoes" ? (
+          <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-semibold">Eventos Inscritos</h2>
             </div>
@@ -243,9 +269,9 @@ export default function DashboardPage() {
                 ))
               )}
             </div>
-          </TabsContent>
-
-          <TabsContent value="events" className="space-y-6">
+          </div>
+        ) : (
+          <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-semibold">
                 {user.type === "organizer" ? "Eventos Organizados" : "Eventos"}
@@ -291,8 +317,8 @@ export default function DashboardPage() {
                 ))
               )}
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
       </div>
     </div>
   );

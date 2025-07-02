@@ -31,7 +31,7 @@ type EventWithAttendeesDto struct {
 	Location    string    `json:"location"`
 	Date        time.Time `json:"date"`
 	Description string    `json:"description"`
-	OrganizerID string    `json:"organizer_id"`
+	Organizer UserResponseDTO    `json:"organizer"`
 	Attendees   []UserResponseDTO `json:"attendees"`
 	CreatedAt   time.Time `json:"created_at"`
 	Category	string    `json:"category"`
