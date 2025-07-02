@@ -96,7 +96,7 @@ export default function CreateEventPage() {
     try {
       const userId = localStorage.getItem("userId");
       const userEmail = localStorage.getItem("userEmail");
-      
+
       if (!userId || userId === "temp-id") {
         if (!userEmail) {
           setError("Usuário não encontrado. Faça login novamente.");
@@ -108,10 +108,26 @@ export default function CreateEventPage() {
       }
 
       // Preparar dados para API conforme esperado pelo backend
+      // Adicionar 3 horas à data de criação do evento
+      const originalEventDate = new Date(`${formData.date}T${formData.time}`);
+      const eventDateWithIncrement = new Date(
+        originalEventDate.getTime() + 3 * 60 * 60 * 1000
+      ); // +3 horas
+
+      // Formatar data no formato esperado pelo Go: "2006-01-02T15:04"
+      const formatDateForGo = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+      };
+
       const eventData: CreateEventRequest = {
-        name: formData.title,           // Backend espera "name"
+        name: formData.title, // Backend espera "name"
         description: formData.description,
-        date: `${formData.date}T${formData.time}`, // Formato completo de data e hora
+        date: formatDateForGo(eventDateWithIncrement), // Formato compatível com Go: "2006-01-02T15:04"
         location: formData.location,
         category: formData.category,
         limit: Number.parseInt(formData.capacity), // Backend espera "limit"
@@ -120,15 +136,19 @@ export default function CreateEventPage() {
 
       // Criar evento via API
       await apiService.createEvent(eventData);
-      
+
       setSuccess("Evento criado com sucesso!");
-      
+
       setTimeout(() => {
         navigate("/dashboard");
       }, 2000);
     } catch (error) {
       console.error("Error creating event:", error);
-      setError(error instanceof Error ? error.message : "Erro ao criar evento. Tente novamente.");
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Erro ao criar evento. Tente novamente."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -199,8 +219,7 @@ export default function CreateEventPage() {
                     onChange={(e) => handleInputChange("title", e.target.value)}
                     required
                   />
-                </div>
-
+                </div>{" "}
                 <div className="md:col-span-2 space-y-2">
                   <Label htmlFor="description">Descrição *</Label>
                   <Textarea
@@ -214,7 +233,13 @@ export default function CreateEventPage() {
                     required
                   />
                 </div>
-
+                <div className="md:col-span-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    <strong>Nota:</strong> O horário do evento será
+                    automaticamente ajustado com um incremento de 3 horas para
+                    compensar diferenças de fuso horário.
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="date">Data *</Label>
                   <div className="relative">
@@ -231,7 +256,6 @@ export default function CreateEventPage() {
                     />
                   </div>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="time">Horário *</Label>
                   <div className="relative">
@@ -248,7 +272,6 @@ export default function CreateEventPage() {
                     />
                   </div>
                 </div>
-
                 <div className="md:col-span-2 space-y-2">
                   <Label htmlFor="location">Local *</Label>
                   <div className="relative">
@@ -265,7 +288,6 @@ export default function CreateEventPage() {
                     />
                   </div>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="category">Categoria *</Label>
                   <Select
@@ -289,7 +311,6 @@ export default function CreateEventPage() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="capacity">Capacidade *</Label>
                   <div className="relative">
