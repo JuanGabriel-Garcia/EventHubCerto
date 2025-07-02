@@ -25,7 +25,6 @@ type EventsController struct{
 	getEventByIdUseCase usecase.UseCaseWithPropsDecorator[usecases.GetEventByIdUseCaseProps, dtos.EventWithAttendeesDto]
 	registerToEventUseCase usecase.UseCaseWithPropsDecorator[usecases.RegisterToEventUseCaseProps, []string]
 	cancelEventSubscriptionUseCase usecase.UseCaseWithPropsDecorator[usecases.CancelEventSubscriptionUseCaseProps, []string]
-	getEventByOrganizerUseCase usecase.UseCaseWithPropsDecorator[usecases.GetEventByOrganizerUseCaseProps, dtos.EventWithAttendeesDto]
 	getEventsByOrganizerUseCase usecase.UseCaseWithPropsDecorator[string, []dtos.EventDto]
 	getEventsByCategoryUseCase usecase.UseCaseWithPropsDecorator[string, []dtos.EventDto]
 	getEventsByTermUseCase usecase.UseCaseWithPropsDecorator[string, []dtos.EventDto]
@@ -40,7 +39,6 @@ func NewEventsController(
 	getEventByIdUsecase usecase.UseCaseWithPropsDecorator[usecases.GetEventByIdUseCaseProps, dtos.EventWithAttendeesDto],
 	registerToEventUseCase usecase.UseCaseWithPropsDecorator[usecases.RegisterToEventUseCaseProps, []string],
 	cancelEventSubscriptionUseCase usecase.UseCaseWithPropsDecorator[usecases.CancelEventSubscriptionUseCaseProps, []string],
-	getEventByOrganizerUseCase usecase.UseCaseWithPropsDecorator[usecases.GetEventByOrganizerUseCaseProps, dtos.EventWithAttendeesDto],
 	getEventsByOrganizerUseCase usecase.UseCaseWithPropsDecorator[string, []dtos.EventDto],
 	getEventsByCategoryUseCase usecase.UseCaseWithPropsDecorator[string, []dtos.EventDto],
 	getEventsByTermUseCase usecase.UseCaseWithPropsDecorator[string, []dtos.EventDto],
@@ -54,7 +52,6 @@ func NewEventsController(
 		getEventByIdUseCase: getEventByIdUsecase,
 		registerToEventUseCase: registerToEventUseCase,
 		cancelEventSubscriptionUseCase: cancelEventSubscriptionUseCase,
-		getEventByOrganizerUseCase: getEventByOrganizerUseCase,
 		getEventsByOrganizerUseCase: getEventsByOrganizerUseCase,
 		getEventsByCategoryUseCase: getEventsByCategoryUseCase,
 		getEventsByTermUseCase: getEventsByTermUseCase,
@@ -197,33 +194,6 @@ func (ec EventsController) CancelEventSubscription(c *gin.Context) {
 	})
 }
 
-func (ec EventsController) GetEventByOrganizer(c *gin.Context) {
-	eventId := c.Param("eventID")
-	userID, exists := c.Get("userID")
-	if !exists || userID == "" {
-		c.JSON(400, userIDRequired)
-		return
-	}
-
-	if eventId == "" {
-		c.JSON(400, eventIDRequired)
-		return
-	}
-
-	props := usecases.GetEventByOrganizerUseCaseProps{
-		OrganizerId: userID.(string),
-		EventId:     eventId,
-	}
-
-	event, err := ec.getEventByOrganizerUseCase.Execute(props)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(200, event)
-}
-
 func (ec EventsController) GetEventsByOrganizer(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists || userID == "" {
@@ -347,7 +317,6 @@ func (ec EventsController) SetupRoutes() {
 	group.DELETE(eventIDRoute, ec.DeleteEvent)
 	group.POST("/:eventID/register", ec.RegisterToEvent)
 	group.DELETE("/:eventID/register", ec.CancelEventSubscription)
-	group.GET("/:eventID/organizer", ec.GetEventByOrganizer)
 	group.GET("/organizer", ec.GetEventsByOrganizer)
 	group.GET("/category", ec.GetEventsByCategory)
 	group.GET("/search", ec.GetEventsByTerm)

@@ -1,42 +1,41 @@
 import { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
 
-interface OrganizerCache {
-  [key: string]: string;
-}
+// interface OrganizerCache {
+//   [key: string]: string;
+// }
 
-// Cache para evitar múltiplas requisições para o mesmo organizador
-const organizerCache: OrganizerCache = {};
+// // Cache para evitar múltiplas requisições para o mesmo organizador
+// const organizerCache: OrganizerCache = {};
 
-export const useOrganizerName = (organizerId: string) => {
-  const [organizerName, setOrganizerName] = useState<string>('Carregando...');
-  
+export function useOrganizerName(organizerId: string, organizerObject?: any): string {
+  const [organizerName, setOrganizerName] = useState<string>('');
+
   useEffect(() => {
-    if (!organizerId) {
-      setOrganizerName('Organizador não informado');
+    // Se já temos o objeto organizador completo, usar diretamente
+    if (organizerObject && organizerObject.name) {
+      setOrganizerName(organizerObject.name);
       return;
     }
 
-    // Verificar se já temos o nome no cache
-    if (organizerCache[organizerId]) {
-      setOrganizerName(organizerCache[organizerId]);
+    // Caso contrário, buscar pelo ID como antes
+    if (!organizerId) {
+      setOrganizerName('Organizador');
       return;
     }
 
     const fetchOrganizerName = async () => {
       try {
         const user = await apiService.getUserById(organizerId);
-        const name = user.name || 'Nome não informado';
-        organizerCache[organizerId] = name; // Adicionar ao cache
-        setOrganizerName(name);
+        setOrganizerName(user.name);
       } catch (error) {
         console.error('Error fetching organizer name:', error);
-        setOrganizerName('Organizador não encontrado');
+        setOrganizerName('Organizador');
       }
     };
 
     fetchOrganizerName();
-  }, [organizerId]);
+  }, [organizerId, organizerObject]);
 
   return organizerName;
-};
+}

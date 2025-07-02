@@ -26,6 +26,7 @@ func (uc *updateEventUseCase) Execute(props dtos.UpdateEventProps) (*dtos.EventD
 		return nil, err
 	}
 
+	
 	// Verifica se o usuário é o organizador do evento
 	if existingEvent.OrganizerID() != props.OrganizerID {
 		return nil, exceptions.NewBusinessException("User is not authorized to update this event")
@@ -36,6 +37,8 @@ func (uc *updateEventUseCase) Execute(props dtos.UpdateEventProps) (*dtos.EventD
 	if err != nil {
 		return nil, err
 	}
+
+	parsedDate = parsedDate.UTC()
 
 	// Cria o evento atualizado mantendo ID, attendees e createdAt originais
 	originalCreatedAt := existingEvent.CreatedAt()

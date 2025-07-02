@@ -47,9 +47,6 @@ func SetupControllers() {
 	cancelEventSubscriptionUseCase := usecases.NewCancelEventSubscriptionUseCase(userRepository, eventRepository)
 	cancelEventSubscriptionDecorator := usecase.NewUseCaseWithPropsDecorator(cancelEventSubscriptionUseCase)
 
-	getEventByOrganizerUseCase := usecases.NewGetEventByOrganizerUseCase(eventRepository, userRepository)
-	getEventByOrganizerDecorator := usecase.NewUseCaseWithPropsDecorator(getEventByOrganizerUseCase)
-
 	getEventsByOrganizerUseCase := usecases.NewGetEventsByOrganizerUseCase(eventRepository)
 	getEventsByOrganizerDecorator := usecase.NewUseCaseWithPropsDecorator(getEventsByOrganizerUseCase)
 
@@ -68,7 +65,6 @@ func SetupControllers() {
 		getEventByIdDecorator,
 		registerToEventDecorator,
 		cancelEventSubscriptionDecorator,
-		getEventByOrganizerDecorator,
 		getEventsByOrganizerDecorator,
 		getEventsByCategoryDecorator,
 		getEventsByTermDecorator,

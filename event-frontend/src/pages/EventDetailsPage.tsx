@@ -5,11 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Calendar, MapPin, Users, User } from "lucide-react";
+import { Calendar, MapPin, Users, User, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { apiService } from "@/services/api";
 import type { EventWithAttendeesResponse } from "@/types/api";
 import { useOrganizerName } from "@/hooks/useOrganizerName";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function EventDetailsPage() {
   const { id } = useParams();
@@ -17,18 +26,20 @@ export default function EventDetailsPage() {
   const [event, setEvent] = useState<EventWithAttendeesResponse | null>(null);
   const [isRegistered, setIsRegistered] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [message, setMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   
-  // Buscar nome do organizador
-  const organizerName = useOrganizerName(event?.organizer_id || "");
+  // Buscar nome do organizador - usar o objeto completo se disponível
+  const organizerName = useOrganizerName(event?.organizer?.id || "", event?.organizer);
 
   useEffect(() => {
     const loggedIn = localStorage.getItem("isLoggedIn") === "true";
     setIsLoggedIn(loggedIn);
 
     if (id) {
-      loadEventDetails(loggedIn); // Passar o status de login
+      loadEventDetails(loggedIn);
     }
   }, [id]);
 
@@ -41,24 +52,179 @@ export default function EventDetailsPage() {
     }
   }, [isLoggedIn, id]);
 
+  // Verificar se o usuário atual é o organizador do evento
+  const isEventOrganizer = () => {
+    if (!event || !isLoggedIn) return false;
+    
+    const currentUserId = localStorage.getItem("userId");
+    const currentUserEmail = localStorage.getItem("userEmail");
+    
+    // Verificar por ID (se não for temp-id)
+    if (currentUserId && currentUserId !== "temp-id" && event.organizer.id === currentUserId) {
+      return true;
+    }
+    
+    // Verificar por email (fallback)
+    if (currentUserEmail && event.organizer.email && event.organizer.email === currentUserEmail) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Função helper para processar dados de participantes
+  const processAttendeesData = (eventData: any): EventWithAttendeesResponse => {
+    // Converter a estrutura da API para o formato esperado pelo frontend
+    const processedEvent: EventWithAttendeesResponse = {
+      id: eventData.id,
+      name: eventData.name,
+      description: eventData.description,
+      date: eventData.date,
+      location: eventData.location,
+      category: eventData.category,
+      limit: eventData.limit,
+      created_at: eventData.created_at,
+      organizer: eventData.organizer || {
+        id: eventData.organizer_id || "",
+        name: "Organizador",
+        email: "",
+        userType: "organizer",
+        createdAt: ""
+      },
+      attendees: [],
+      attendees_count: 0
+    };
+
+    // Processar attendees se existirem
+    if (eventData.attendees && Array.isArray(eventData.attendees) && eventData.attendees.length > 0) {
+      // Se os attendees são objetos completos (com name, email), usar diretamente
+      if (typeof eventData.attendees[0] === 'object' && eventData.attendees[0] !== null && eventData.attendees[0].name) {
+        processedEvent.attendees = eventData.attendees.map((attendee: any) => ({
+          id: attendee.id,
+          name: attendee.name,
+          email: attendee.email,
+          userType: attendee.userType || "participant",
+          createdAt: attendee.created_at || attendee.createdAt || new Date().toISOString()
+        }));
+      } else if (typeof eventData.attendees[0] === 'string') {
+        // Se os attendees são apenas IDs, criar placeholders temporários
+        processedEvent.attendees = eventData.attendees.map((attendeeId: string, index: number) => ({
+          id: attendeeId,
+          name: `Participante ${index + 1}`,
+          email: `participante${index + 1}@temp.com`,
+          userType: "participant",
+          createdAt: new Date().toISOString()
+        }));
+      }
+      processedEvent.attendees_count = eventData.attendees.length;
+    } else {
+      // Se attendees for null ou vazio
+      processedEvent.attendees = [];
+      processedEvent.attendees_count = 0;
+    }
+
+    return processedEvent;
+  };
+
+  // Nova função para buscar dados completos dos participantes quando temos apenas IDs
+  const fetchAttendeesDetails = async (attendeeIds: string[]) => {
+    const attendeesDetails = [];
+    
+    for (const attendeeId of attendeeIds) {
+      try {
+        const userData = await apiService.getUserById(attendeeId);
+        attendeesDetails.push({
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
+          userType: userData.userType,
+          createdAt: userData.createdAt
+        });
+      } catch (error) {
+        // Em caso de erro, adicionar placeholder
+        attendeesDetails.push({
+          id: attendeeId,
+          name: `Participante ${attendeesDetails.length + 1}`,
+          email: `participante${attendeesDetails.length + 1}@temp.com`,
+          userType: "participant",
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+    
+    return attendeesDetails;
+  };
+
   const loadEventDetails = async (userLoggedIn?: boolean) => {
     if (!id) return;
     
-    // Usar o parâmetro ou o estado atual
     const currentlyLoggedIn = userLoggedIn !== undefined ? userLoggedIn : isLoggedIn;
     
     try {
       setIsLoading(true);
       
-      // SEMPRE usar o método de fallback que funciona (buscar de todos os eventos)
+      // Tentar buscar o evento pela API primeiro (se estiver logado)
+      if (currentlyLoggedIn) {
+        try {
+          const eventData = await apiService.getEventById(id);
+          
+          // Usar a função helper para processar os dados
+          let formattedEvent = processAttendeesData(eventData);
+          
+          // Sempre tentar buscar participantes através dos eventos do usuário
+          try {
+            // Buscar todos os eventos para pegar a lista de attendees (que pode ter mais dados)
+            const allEvents = await apiService.getEvents();
+            const eventWithAttendees = allEvents.find(e => e.id === id);
+            
+            if (eventWithAttendees && eventWithAttendees.attendees && 
+                Array.isArray(eventWithAttendees.attendees) && 
+                eventWithAttendees.attendees.length > 0) {
+              
+              // Se são IDs (strings), buscar dados completos
+              if (typeof eventWithAttendees.attendees[0] === 'string') {
+                try {
+                  const attendeesDetails = await fetchAttendeesDetails(eventWithAttendees.attendees as string[]);
+                  formattedEvent.attendees = attendeesDetails;
+                  formattedEvent.attendees_count = attendeesDetails.length;
+                } catch (error) {
+                  // Criar placeholders se falhar
+                  formattedEvent.attendees = (eventWithAttendees.attendees as string[]).map((id: string, index: number) => ({
+                    id,
+                    name: `Participante ${index + 1}`,
+                    email: `participante${index + 1}@temp.com`,
+                    userType: "participant",
+                    createdAt: new Date().toISOString()
+                  }));
+                  formattedEvent.attendees_count = eventWithAttendees.attendees.length;
+                }
+              } else {
+                // Se já são objetos, usar diretamente
+                formattedEvent.attendees = eventWithAttendees.attendees as any[];
+                formattedEvent.attendees_count = eventWithAttendees.attendees.length;
+              }
+            }
+          } catch (fallbackError) {
+            // Silenciosamente continuar se não conseguir buscar participantes
+          }
+          
+          setEvent(formattedEvent);
+          
+          // Verificar se o usuário está inscrito
+          await checkUserRegistration();
+          return;
+        } catch (apiError) {
+          // Se a API falhar, tentar fallback
+        }
+      }
+      
+      // Fallback: buscar de todos os eventos
       await loadEventDetailsWithFallback();
       
-      // Check if user is registered for the event using the registered events endpoint
       if (currentlyLoggedIn) {
         await checkUserRegistration();
       }
     } catch (error) {
-      console.error("Error loading event details:", error);
       setMessage("Erro ao carregar detalhes do evento");
     } finally {
       setIsLoading(false);
@@ -69,42 +235,69 @@ export default function EventDetailsPage() {
   const loadEventDetailsWithFallback = async () => {
     if (!id) return;
     
-    // Buscar todos os eventos (mesmo endpoint que o EventCard usa)
-    const allEvents = await apiService.getEvents();
-    
-    // Encontrar o evento específico
-    const eventFromList = allEvents.find(e => e.id === id);
-    
-    if (eventFromList) {
-      // Criar um objeto EventWithAttendeesResponse baseado no CreateEventResponse
-      const eventData: EventWithAttendeesResponse = {
-        id: eventFromList.id,
-        name: eventFromList.name,
-        description: eventFromList.description,
-        date: eventFromList.date,
-        location: eventFromList.location,
-        category: eventFromList.category,
-        limit: eventFromList.limit,
-        organizer_id: eventFromList.organizer_id,
-        created_at: eventFromList.created_at,
-        attendees: [], // Inicializar vazio
-        attendees_count: eventFromList.attendees ? eventFromList.attendees.length : 0
-      };
+    try {
+      const allEvents = await apiService.getEvents();
+      const eventFromList = allEvents.find(e => e.id === id);
       
-      // Se temos IDs dos attendees, criar objetos placeholder (IGUAL ao EventCard)
-      if (eventFromList.attendees && eventFromList.attendees.length > 0) {
-        eventData.attendees = eventFromList.attendees.map((attendeeId, index) => ({
-          id: attendeeId,
-          name: `Participante ${index + 1}`,
-          email: `participante${index + 1}@temp.com`,
-          userType: "participant",
-          createdAt: new Date().toISOString()
-        }));
+      if (eventFromList) {
+        // Buscar dados do organizador se tivermos o ID
+        let organizerData = null;
+        if (eventFromList.organizer_id) {
+          try {
+            organizerData = await apiService.getUserById(eventFromList.organizer_id);
+          } catch (error) {
+            // Silenciosamente continuar se não conseguir buscar dados do organizador
+          }
+        }
+
+        // Usar a função helper para processar os dados
+        let eventData = processAttendeesData({
+          id: eventFromList.id,
+          name: eventFromList.name,
+          description: eventFromList.description,
+          date: eventFromList.date,
+          location: eventFromList.location,
+          category: eventFromList.category,
+          limit: eventFromList.limit,
+          created_at: eventFromList.created_at,
+          attendees: eventFromList.attendees || [],
+          organizer: organizerData
+        });
+        
+        // Se temos IDs de participantes, buscar seus dados completos
+        if (eventFromList.attendees && 
+            Array.isArray(eventFromList.attendees) && 
+            eventFromList.attendees.length > 0) {
+          
+          if (typeof eventFromList.attendees[0] === 'string') {
+            try {
+              const attendeesDetails = await fetchAttendeesDetails(eventFromList.attendees as string[]);
+              eventData.attendees = attendeesDetails;
+              eventData.attendees_count = attendeesDetails.length;
+            } catch (error) {
+              // Usar placeholders se falhar
+              eventData.attendees = (eventFromList.attendees as string[]).map((id: string, index: number) => ({
+                id,
+                name: `Participante ${index + 1}`,
+                email: `participante${index + 1}@temp.com`,
+                userType: "participant",
+                createdAt: new Date().toISOString()
+              }));
+              eventData.attendees_count = eventFromList.attendees.length;
+            }
+          } else {
+            // Se já são objetos, usar diretamente
+            eventData.attendees = eventFromList.attendees as any[];
+            eventData.attendees_count = eventFromList.attendees.length;
+          }
+        }
+        
+        setEvent(eventData);
+      } else {
+        throw new Error("Event not found in list");
       }
-      
-      setEvent(eventData);
-    } else {
-      throw new Error("Event not found in list");
+    } catch (error) {
+      throw error;
     }
   };
 
@@ -116,7 +309,6 @@ export default function EventDetailsPage() {
       const isUserRegistered = registeredEvents.some(event => event.id === id);
       setIsRegistered(isUserRegistered);
     } catch (error) {
-      console.error("Error checking user registration:", error);
       // Se não conseguir verificar, assume que não está inscrito
       setIsRegistered(false);
     }
@@ -133,7 +325,7 @@ export default function EventDetailsPage() {
     // Verificar se o usuário atual é o organizador do evento
     const currentUserId = localStorage.getItem("userId");
     
-    if (currentUserId && currentUserId !== "temp-id" && event.organizer_id === currentUserId) {
+    if (currentUserId && currentUserId !== "temp-id" && event.organizer.id === currentUserId) {
       setMessage("❌ Não é possível se inscrever no seu próprio evento.");
       return;
     }
@@ -146,30 +338,11 @@ export default function EventDetailsPage() {
       setMessage("✅ Inscrição realizada com sucesso!");
       setIsRegistered(true);
       
-      // Atualizar o contador localmente sem recarregar a página
-      if (event) {
-        // Usar a mesma lógica do EventCard - atualizar o array attendees
-        const currentAttendees = event.attendees || [];
-        
-        // Criar um placeholder de usuário
-        const tempUser = {
-          id: "temp-user",
-          name: "Novo Participante",
-          email: "temp@temp.com",
-          userType: "participant",
-          createdAt: new Date().toISOString()
-        };
-        
-        setEvent({
-          ...event,
-          attendees: [...currentAttendees, tempUser]
-        });
-      }
+      // Recarregar os dados do evento para atualizar a lista de participantes
+      await loadEventDetails();
     } catch (error) {
-      // Tratar erros específicos
       const errorMessage = error instanceof Error ? error.message : String(error);
       
-      // Verificar mensagens específicas do backend
       if (errorMessage.includes("already exists") || errorMessage.includes("Attendee already exists")) {
         setMessage("❌ Você já está inscrito neste evento.");
         setIsRegistered(true);
@@ -199,20 +372,9 @@ export default function EventDetailsPage() {
       setMessage("✅ Inscrição cancelada com sucesso.");
       setIsRegistered(false);
       
-      // Atualizar o contador localmente sem recarregar a página
-      if (event) {
-        // Usar a mesma lógica do EventCard - atualizar o array attendees
-        const currentAttendees = event.attendees || [];
-        const newAttendees = currentAttendees.slice(0, -1); // Remove o último participante
-        
-        setEvent({
-          ...event,
-          attendees: newAttendees
-        });
-      }
+      // Recarregar os dados do evento para atualizar a lista de participantes
+      await loadEventDetails();
     } catch (error) {
-      console.error("Error canceling registration:", error);
-      
       const errorMessage = error instanceof Error ? error.message : String(error);
       
       if (errorMessage.includes("not subscribed") || errorMessage.includes("not registered")) {
@@ -223,6 +385,36 @@ export default function EventDetailsPage() {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!event || !id) return;
+
+    setIsDeleting(true);
+    setMessage("");
+    setShowDeleteDialog(false); // Fechar o dialog
+
+    try {
+      await apiService.deleteEvent(id);
+      setMessage("✅ Evento deletado com sucesso! Todos os participantes foram removidos automaticamente.");
+      
+      // Aguardar um pouco para o usuário ver a mensagem
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 3000);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+        setMessage("❌ Você não tem permissão para deletar este evento.");
+      } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
+        setMessage("❌ Evento não encontrado.");
+      } else {
+        setMessage("❌ Erro ao deletar evento. Tente novamente.");
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -272,33 +464,34 @@ export default function EventDetailsPage() {
     }
   };
 
+  // Verificação de loading inicial
   if (isLoading && !event) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-semibold mb-2">Carregando...</h2>
-        </div>
+        <LoadingSpinner text="Carregando detalhes do evento..." />
       </div>
     );
   }
 
+  // Verificação se evento não foi encontrado
   if (!event) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-semibold mb-2">Evento não encontrado</h2>
-          <Button onClick={handleGoBack}>Voltar</Button>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Evento não encontrado</h2>
+          <Button onClick={handleGoBack}>
+            ← Voltar
+          </Button>
         </div>
       </div>
     );
   }
 
-  // Usar a mesma lógica que funciona no EventCard
-  const attendeesCount = event.attendees ? event.attendees.length : 0;
-  
+  // Usar a nova estrutura de dados (calculado apenas uma vez)
+  const attendeesCount = event.attendees_count || event.attendees?.length || 0;
   const capacity = event.limit || 0;
   const isEventFull = capacity > 0 && attendeesCount >= capacity;
-  
+
   const getCapacityColor = () => {
     if (capacity === 0) return "text-gray-600"; // Sem limite
     const percentage = (attendeesCount / capacity) * 100;
@@ -316,17 +509,19 @@ export default function EventDetailsPage() {
               EventHub
             </Link>
             <nav className="flex items-center space-x-4">
-              {isLoggedIn ? (
-                <Link to="/dashboard">
-                  <Button variant="ghost">Dashboard</Button>
-                </Link>
-              ) : (
+              <Link to="/">
+                <Button variant="ghost">Explorar Eventos</Button>
+              </Link>
+              {isLoggedIn && (
                 <>
-                  <Link to="/login">
-                    <Button variant="ghost">Entrar</Button>
+                  <Link to="/dashboard">
+                    <Button variant="ghost">Dashboard</Button>
                   </Link>
-                  <Link to="/register">
-                    <Button>Cadastrar</Button>
+                  <Link to="/create-event">
+                    <Button variant="ghost">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Criar Evento
+                    </Button>
                   </Link>
                 </>
               )}
@@ -353,6 +548,92 @@ export default function EventDetailsPage() {
                 {event.category}
               </Badge>
             </div>
+            
+            {/* Botões de ação */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              {isLoggedIn && !isEventOrganizer() && (
+                <Button
+                  onClick={isRegistered ? handleCancelRegistration : handleRegistration}
+                  disabled={isLoading || (!isRegistered && isEventFull)}
+                  className={isRegistered 
+                    ? "bg-red-600 hover:bg-red-700" 
+                    : (isEventFull ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700")
+                  }
+                >
+                  {isLoading ? (
+                    <LoadingSpinner />
+                  ) : isRegistered ? (
+                    "Cancelar Inscrição"
+                  ) : isEventFull ? (
+                    "Evento Lotado"
+                  ) : (
+                    "Se Inscrever"
+                  )}
+                </Button>
+              )}
+              
+              {/* Botão de deletar para organizadores */}
+              {isLoggedIn && isEventOrganizer() && (
+                <div>
+                  <Button
+                    onClick={() => setShowDeleteDialog(true)}
+                    variant="destructive"
+                    disabled={isDeleting}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {isDeleting ? (
+                      <LoadingSpinner />
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Deletar Evento
+                      </>
+                    )}
+                  </Button>
+
+                  <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-red-600" />
+                          Confirmar Exclusão
+                        </DialogTitle>
+                        <DialogDescription>
+                          Tem certeza que deseja deletar o evento "<strong>{event.name}</strong>"?
+                          <br /><br />
+                          <span className="text-red-600 font-medium">
+                            Esta ação não pode ser desfeita e todos os participantes inscritos ({attendeesCount}) serão removidos automaticamente.
+                          </span>
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowDeleteDialog(false)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleDeleteEvent}
+                          disabled={isDeleting}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          {isDeleting ? (
+                            <>
+                              <LoadingSpinner />
+                              <span className="ml-2">Deletando...</span>
+                            </>
+                          ) : (
+                            "Sim, Deletar Evento"
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -362,11 +643,7 @@ export default function EventDetailsPage() {
             message.includes('✅') ? 'border-green-200 bg-green-50' :
             'border-blue-200 bg-blue-50'
           }`}>
-            <AlertDescription className={
-              message.includes('❌') ? 'text-red-800' :
-              message.includes('✅') ? 'text-green-800' :
-              'text-blue-800'
-            }>
+            <AlertDescription>
               {message}
             </AlertDescription>
           </Alert>
@@ -435,11 +712,16 @@ export default function EventDetailsPage() {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">
-                      {organizerName}
+                      {event.organizer.name || organizerName}
                     </p>
                     <p className="text-sm text-gray-600">
                       Organizador
                     </p>
+                    {event.organizer.email && (
+                      <p className="text-xs text-gray-500">
+                        {event.organizer.email}
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -510,9 +792,67 @@ export default function EventDetailsPage() {
                 )}
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Participantes Inscritos
+                  {attendeesCount > 0 && (
+                    <Badge variant="secondary">
+                      {attendeesCount}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {event.attendees && event.attendees.length > 0 ? (
+                  <div className="space-y-3">
+                    {event.attendees.map((attendee, index) => (
+                      <div 
+                        key={attendee.id} 
+                        className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <User className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 truncate">
+                            {attendee.name || `Participante ${index + 1}`}
+                          </p>
+                          <p className="text-sm text-gray-600 truncate">
+                            {attendee.email || `participante${index + 1}@temp.com`}
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0">
+                          <Badge variant="secondary" className="text-xs">
+                            #{index + 1}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                    <p className="text-gray-600 font-medium">Nenhum participante inscrito</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {isLoggedIn ? "Seja o primeiro a se inscrever neste evento!" : "Faça login para ver os participantes"}
+                    </p>
+                    {capacity > 0 && (
+                      <p className="text-xs text-gray-400 mt-2">
+                        {capacity} vagas disponíveis
+                      </p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>
     </div>
   );
 }
+
+localStorage.setItem("userId", "10026c69-8e92-42cd-a332-64501a8f371c");

@@ -77,7 +77,7 @@ func NewEvent(props EventProps) (Event, error) {
 		description: *props.Description,
 		organizerID: *props.OrganizerID,
 		attendees:   props.Attendees,
-		createdAt:   time.Now(),
+		createdAt:   time.Now().UTC(),
         category:    *props.Category,
         limit:       *props.Limit,
     }

@@ -1,88 +1,99 @@
 package usecases
 
 import (
-	"sync"
+"sync"
 
-	"github.com/Gabriel-Schiestl/api-go/internal/application/dtos"
-	"github.com/Gabriel-Schiestl/api-go/internal/domain/models"
-	"github.com/Gabriel-Schiestl/api-go/internal/domain/repositories"
+"github.com/Gabriel-Schiestl/api-go/internal/application/dtos"
+"github.com/Gabriel-Schiestl/api-go/internal/domain/models"
+"github.com/Gabriel-Schiestl/api-go/internal/domain/repositories"
 )
 
 type getEventByIdUseCase struct {
-	eventRepo repositories.IEventRepository
-	userRepo  repositories.UserRepository
+eventRepo repositories.IEventRepository
+userRepo  repositories.UserRepository
 }
 
 func NewGetEventByIdUseCase(eventRepo repositories.IEventRepository, userRepo repositories.UserRepository) *getEventByIdUseCase {
-	return &getEventByIdUseCase{
-		eventRepo: eventRepo,
-		userRepo:  userRepo,
-	}
+return &getEventByIdUseCase{
+eventRepo: eventRepo,
+userRepo:  userRepo,
+}
 }
 
 type GetEventByIdUseCaseProps struct {
-	EventID string
-	UserID  string
+EventID string
+UserID  string
 }
 
 func (uc *getEventByIdUseCase) Execute(props GetEventByIdUseCaseProps) (dtos.EventWithAttendeesDto, error) {
-	event, err := uc.eventRepo.FindByID(props.EventID)
-	if err != nil {
-		return dtos.EventWithAttendeesDto{}, err
-	}
+event, err := uc.eventRepo.FindByID(props.EventID)
+if err != nil {
+return dtos.EventWithAttendeesDto{}, err
+}
 
-	eventDto := dtos.EventWithAttendeesDto{
-		ID:          event.ID(),
-		Name:        event.Name(),
-		Description: event.Description(),
-		Location:    event.Location(),
-		Date:        event.Date(),
-		OrganizerID: event.OrganizerID(),
-		CreatedAt:   event.CreatedAt(),
-		Category: 	 event.Category(),
-		Limit:       event.Limit(),
-	}
+eventDto := dtos.EventWithAttendeesDto{
+ID:          event.ID(),
+Name:        event.Name(),
+Description: event.Description(),
+Location:    event.Location(),
+Date:        event.Date(),
+CreatedAt:   event.CreatedAt(),
+Category:  event.Category(),
+Limit:       event.Limit(),
+}
 
-	if event.OrganizerID() != props.UserID {
-		return eventDto, nil
-	}
+organizer, err := uc.userRepo.FindById(event.OrganizerID())
+if err != nil {
+return dtos.EventWithAttendeesDto{}, err
+}
 
-	usersChan := make(chan models.User)
-	wg := sync.WaitGroup{}
+eventDto.Organizer = dtos.UserResponseDTO{
+ID:        organizer.GetID(),
+Email:     organizer.GetEmail(),
+Name:    organizer.GetName(),
+CreatedAt: organizer.GetCreatedAt().String(),
+}
 
-	for _, attendeeId := range event.Attendees() {
-		wg.Add(1)
-		go func(attendeeId string) {
-			defer wg.Done()
+if event.OrganizerID() != props.UserID {
+return eventDto, nil
+}
 
-			user, err := uc.userRepo.FindById(attendeeId)
-			if err != nil {
-				usersChan <- nil
-				return
-			}
+usersChan := make(chan models.User)
+wg := sync.WaitGroup{}
 
-			usersChan <- user
-		}(attendeeId)
-	}
+for _, attendeeId := range event.Attendees() {
+wg.Add(1)
+go func(attendeeId string) {
+defer wg.Done()
 
-	go func() {
-		wg.Wait()
-		close(usersChan)
-	}()
+user, err := uc.userRepo.FindById(attendeeId)
+if err != nil {
+usersChan <- nil
+return
+}
 
-	var users []dtos.UserResponseDTO
-	for user := range usersChan {
-		if user != nil {
-			users = append(users, dtos.UserResponseDTO{
-				ID:        user.GetID(),
-				Email:     user.GetEmail(),
-				Name: user.GetName(),
-				CreatedAt: user.GetCreatedAt().String(),
-			})
-		}
-	}
+usersChan <- user
+}(attendeeId)
+}
 
-	eventDto.Attendees = users
-	
-	return eventDto, nil
+go func() {
+wg.Wait()
+close(usersChan)
+}()
+
+var users []dtos.UserResponseDTO
+for user := range usersChan {
+if user != nil {
+users = append(users, dtos.UserResponseDTO{
+ID:        user.GetID(),
+Email:     user.GetEmail(),
+Name:    user.GetName(),
+CreatedAt: user.GetCreatedAt().String(),
+})
+}
+}
+
+eventDto.Attendees = users
+
+return eventDto, nil
 }

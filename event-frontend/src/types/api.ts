@@ -88,7 +88,7 @@ export interface EventWithAttendeesResponse {
   location: string;
   date: string;        // Formato ISO com data e hora
   description: string;
-  organizer_id: string;
+  organizer: CreateUserResponse;
   attendees: CreateUserResponse[]; // Array de usuários participantes (só para organizador)
   attendees_count: number;         // Número total de participantes (sempre visível)
   created_at: string;
